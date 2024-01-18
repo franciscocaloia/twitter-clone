@@ -17,11 +17,41 @@ function UpdateTextAreaHeight(textarea: HTMLTextAreaElement | null) {
 }
 
 export const NewTweetForm = ({ user }: NewTweetFormProps) => {
+  const utils = api.useUtils();
+  const session = useSession();
   const [tweetValue, setTweetValue] = useState("");
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const tweetMutation = api.tweet.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setTweetValue("");
+
+      if (session.status !== "authenticated") return;
+
+      const newTweet = {
+        id: data.id,
+        text: data.text,
+        createdAt: data.createdAt,
+        likeCount: 0,
+        likedByMe: false,
+        user: {
+          id: data.userId,
+          name: session.data?.user.name ?? null,
+          image: session.data?.user.image ?? null,
+        },
+      };
+      utils.tweet.infiniteFeed.setInfiniteData({}, (oldData) => {
+        if (oldData?.pages[0] == undefined) return;
+        return {
+          ...oldData,
+          pages: [
+            {
+              ...oldData.pages[0],
+              tweets: [newTweet, ...oldData.pages[0].tweets],
+            },
+            ...oldData.pages.slice(0, 1),
+          ],
+        };
+      });
     },
   });
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
