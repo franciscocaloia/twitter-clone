@@ -17,7 +17,7 @@ export const tweetRouter = createTRPCRouter({
     .query(async ({ ctx, input: { limit = 10, cursor } }) => {
       const currentUserId = ctx.session?.user.id;
       const data = await ctx.db.tweet.findMany({
-        take: limit ?? 10,
+        take: limit + 1,
         cursor: cursor ? { createdAt_id: cursor } : undefined,
         orderBy: { createdAt: "desc" },
         select: {
@@ -41,7 +41,7 @@ export const tweetRouter = createTRPCRouter({
       });
       let nextCursor: typeof cursor | undefined;
 
-      if (data.length > 0) {
+      if (data.length > limit) {
         const lastTweet = data.pop();
         if (lastTweet) {
           nextCursor = {
@@ -74,5 +74,30 @@ export const tweetRouter = createTRPCRouter({
           userId: ctx.session.user.id,
         },
       });
+    }),
+  toggleLike: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const existingLike = await ctx.db.like.findUnique({
+        where: {
+          userId_tweetId: { userId: ctx.session.user.id, tweetId: input.id },
+        },
+      });
+      if (existingLike == null) {
+        await ctx.db.like.create({
+          data: {
+            tweetId: input.id,
+            userId: ctx.session.user.id,
+          },
+        });
+        return { addedLike: true };
+      } else {
+        await ctx.db.like.delete({
+          where: {
+            userId_tweetId: { userId: ctx.session.user.id, tweetId: input.id },
+          },
+        });
+        return { addedLike: false };
+      }
     }),
 });
